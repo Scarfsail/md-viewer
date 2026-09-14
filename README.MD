@@ -200,6 +200,20 @@ python3 server.py --root /path/to/notes [--port 8000] [--bind 0.0.0.0]
 - `--root` (required): the folder whose files are exposed.
 - `--port` (default `8000`) and `--bind` (default `0.0.0.0`, all interfaces).
 
+#### Docker
+
+You can run host mode with Docker instead, with nothing but Docker itself needed on the host:
+
+1. Set `MD_ROOT` in the `.env` file next to `docker-compose.yml` to your Markdown folder, e.g. `MD_ROOT=/home/me/docs` (it defaults to `./markdowns`). The folder must already exist before you start the container, otherwise Docker creates it as `root` and saves will fail to take ownership correctly.
+2. Run `docker compose up -d --build`.
+3. Open http://localhost:8000.
+4. `docker compose down` stops it.
+5. To update after pulling changes: `git pull && docker compose up -d --build`.
+
+Files saved through the app are written as UID/GID `1000:1000` by default, so they end up owned by root/another user if your host account uses a different one. If so, add `UID=...` and `GID=...` to the same `.env` file, or `export UID; export GID=$(id -g)` before running `docker compose up` (bash sets `UID` automatically but not `GID`).
+
+The same no-authentication warning below applies when running via Docker.
+
 When the app detects the server it adds **Open** (tree view plus fuzzy search) and **Save** (also `Ctrl/Cmd+S`) to the **File** menu, and the path of the open file in the header (prefixed with `•` while there are unsaved changes). Only `.md` / `.markdown` files under `--root` are listed, read or written; hidden directories and `node_modules` are skipped, and paths escaping the root (`..`, absolute paths, symlinks) are rejected. Import, drag-and-drop and Export keep working as usual, and served any other way the app behaves exactly as before.
 
 Saving never silently overwrites changes made on disk. If the file changed since you opened it, a dialog offers to **Overwrite** it with your version, **Load disk version** (discarding your edits), or **Cancel**.
