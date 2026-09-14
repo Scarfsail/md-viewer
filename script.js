@@ -201,7 +201,13 @@ graph TD
 
 **Created with ❤️ for markdown enthusiasts**`;
 
-  markdownEditor.value = sampleMarkdown;
+  // A URL naming a host file gets first chance at the editor — don't flash the sample
+  // doc first, only to immediately replace it once the host file loads.
+  const pendingHostPath = new URLSearchParams(location.search).get("path");
+
+  if (!pendingHostPath) {
+    markdownEditor.value = sampleMarkdown;
+  }
 
   function renderMarkdown() {
     try {
@@ -701,15 +707,23 @@ graph TD
   // The API only exists when served by server.py; static hosting 404s here
   fetch("api/files")
     .then((res) => (res.ok ? res.json() : null))
-    .then((data) => {
+    .then(async (data) => {
       if (data && Array.isArray(data.files)) {
         hostMode = true;
         updateHostUi();
-        const path = new URLSearchParams(location.search).get("path");
-        if (path) openHostFile(path);
+        if (pendingHostPath) await openHostFile(pendingHostPath);
       }
     })
-    .catch(() => {});
+    .catch(() => {})
+    .finally(() => {
+      // Nothing ended up loaded for a pending path — no host mode, or the file failed to
+      // open — so show the sample doc the initial synchronous render skipped for it.
+      if (pendingHostPath && hostFile === null) {
+        markdownEditor.value = sampleMarkdown;
+        renderMarkdown();
+        updateMobileStats();
+      }
+    });
 
   // Returns { status, data }; throws for anything but success or a 409 conflict
   async function hostApi(url, options) {
