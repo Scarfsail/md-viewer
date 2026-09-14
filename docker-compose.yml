@@ -1,0 +1,14 @@
+services:
+  md-viewer:
+    build: .
+    ports:
+      # Use "127.0.0.1:8000:8000" instead to only accept connections from
+      # localhost (the server has no authentication, see README.MD).
+      - "8000:8000"
+    volumes:
+      # Left side is the host folder to expose; can be any absolute path,
+      # e.g. "/home/me/docs:/markdowns".
+      - "./markdowns:/markdowns"
+    user: "${UID:-1000}:${GID:-1000}"
+    init: true
+    restart: unless-stopped
