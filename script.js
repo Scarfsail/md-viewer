@@ -262,6 +262,7 @@ graph TD
       dropzone.style.display = "none";
       // A browser-local file must never be saved over the previous host file
       hostFile = null;
+      setUrlPath(null);
       updateHostUi();
     };
     reader.readAsText(file);
@@ -704,6 +705,8 @@ graph TD
       if (data && Array.isArray(data.files)) {
         hostMode = true;
         updateHostUi();
+        const path = new URLSearchParams(location.search).get("path");
+        if (path) openHostFile(path);
       }
     })
     .catch(() => {});
@@ -724,6 +727,20 @@ graph TD
 
   function hostFileMetaUrl(path) {
     return "api/file-meta?path=" + encodeURIComponent(path);
+  }
+
+  // Keeps the open host file's path in the URL via replaceState (not pushState — opening a
+  // file isn't something the user expects Back to step through). path === null removes it.
+  function setUrlPath(path) {
+    const params = new URLSearchParams(location.search);
+    if (path === null) {
+      params.delete("path");
+    } else {
+      params.set("path", path);
+    }
+    const query = params.toString();
+    const url = location.pathname + (query ? "?" + query : "") + location.hash;
+    history.replaceState(null, "", url);
   }
 
   function isHostFileDirty() {
@@ -771,6 +788,7 @@ graph TD
     }
     const eol = content.includes("\r\n") ? "\r\n" : "\n";
     hostFile = { path, hash, mtime, eol, savedContent: markdownEditor.value, disk: null };
+    setUrlPath(path);
     updateHostUi();
   }
 
@@ -862,6 +880,11 @@ graph TD
     } catch (e) {
       console.error("Opening host file failed:", e);
       alert("Opening file failed: " + e.message);
+      // Only the URL's own path failed to open — clear it so a reload doesn't repeat the
+      // alert forever. An already-open file's URL is left alone.
+      if (new URLSearchParams(location.search).get("path") === path) {
+        setUrlPath(null);
+      }
     }
   }
 
