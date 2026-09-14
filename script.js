@@ -77,7 +77,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const hostConflictModalElement = document.getElementById("host-conflict-modal");
   const hostConflictModal = new bootstrap.Modal(hostConflictModalElement);
   let hostMode = false;
-  let hostFile = null; // { path, hash, eol, savedContent, disk } of the open host file; disk is null | { hash, content } | "deleted"
+  let hostFile = null; // { path, hash, mtime, eol, savedContent, disk } of the open host file; disk is null | { hash, content } | "deleted"
   let hostFiles = [];
   let hostConflict = null; // { hash, content } from the last 409
 
@@ -722,6 +722,10 @@ graph TD
     return "api/file?path=" + encodeURIComponent(path);
   }
 
+  function hostFileMetaUrl(path) {
+    return "api/file-meta?path=" + encodeURIComponent(path);
+  }
+
   function isHostFileDirty() {
     return hostFile !== null && markdownEditor.value !== hostFile.savedContent;
   }
@@ -744,7 +748,7 @@ graph TD
 
   // Textarea normalizes line endings to LF, so savedContent is read back from the
   // editor and CRLF files get their line endings restored on save
-  function setHostEditorContent(path, content, hash, { preserveView = false } = {}) {
+  function setHostEditorContent(path, content, hash, mtime, { preserveView = false } = {}) {
     let view = null;
     if (preserveView) {
       view = {
@@ -766,44 +770,68 @@ graph TD
       dropzone.style.display = "none";
     }
     const eol = content.includes("\r\n") ? "\r\n" : "\n";
-    hostFile = { path, hash, eol, savedContent: markdownEditor.value, disk: null };
+    hostFile = { path, hash, mtime, eol, savedContent: markdownEditor.value, disk: null };
     updateHostUi();
   }
 
   const HOST_POLL_INTERVAL = 2000;
 
-  // Polls the open host file for changes on disk. Live-applies them while the editor
-  // is unmodified; otherwise records them on hostFile.disk for the icon to surface.
+  // Fetches url and returns its parsed JSON, "deleted" for a 404, or null on any other
+  // failure (already console.warn'd) — used by pollHostFile so a flaky poll never alerts.
+  async function fetchHostJsonOrNull(url) {
+    let res;
+    try {
+      res = await fetch(url);
+    } catch (e) {
+      console.warn("Polling host file failed:", e);
+      return null;
+    }
+    if (res.status === 404) return "deleted";
+    if (!res.ok) {
+      console.warn("Polling host file failed:", res.status, res.statusText);
+      return null;
+    }
+    return res.json();
+  }
+
+  // Polls the open host file's mtime for changes on disk — cheap, so it can run every
+  // couple of seconds without re-fetching content that hasn't changed. Only once the
+  // mtime moves do we fetch the full file, live-applying it while the editor is
+  // unmodified, or otherwise recording it on hostFile.disk for the icon to surface.
   async function pollHostFile() {
     if (hostFile === null || document.visibilityState !== "visible") return;
     const file = hostFile;
-    const baseHash = file.hash;
-    let res;
-    try {
-      res = await fetch(hostFileUrl(file.path));
-    } catch (e) {
-      console.warn("Polling host file failed:", e);
-      return;
-    }
-    if (file !== hostFile || file.hash !== baseHash) return;
-    if (res.status === 404) {
+    const baseMtime = file.mtime;
+    const isStale = () => file !== hostFile || file.mtime !== baseMtime;
+
+    const meta = await fetchHostJsonOrNull(hostFileMetaUrl(file.path));
+    if (meta === null || isStale()) return;
+    if (meta === "deleted") {
       file.disk = "deleted";
       updateHostUi();
       return;
     }
-    if (!res.ok) {
-      console.warn("Polling host file failed:", res.status, res.statusText);
+    if (meta.mtime === file.mtime) {
+      file.disk = null;
+      updateHostUi();
       return;
     }
-    const data = await res.json();
-    if (file !== hostFile || file.hash !== baseHash) return;
+
+    const data = await fetchHostJsonOrNull(hostFileUrl(file.path));
+    if (data === null || isStale()) return;
+    if (data === "deleted") {
+      file.disk = "deleted";
+      updateHostUi();
+      return;
+    }
     if (data.hash === file.hash) {
+      file.mtime = data.mtime;
       file.disk = null;
     } else if (!isHostFileDirty()) {
-      setHostEditorContent(file.path, data.content, data.hash, { preserveView: true });
+      setHostEditorContent(file.path, data.content, data.hash, data.mtime, { preserveView: true });
       return;
     } else {
-      file.disk = { hash: data.hash, content: data.content };
+      file.disk = { hash: data.hash, content: data.content, mtime: data.mtime };
     }
     updateHostUi();
   }
@@ -820,7 +848,7 @@ graph TD
     if (isHostFileDirty() && !confirm("Discard your edits and load the version on disk?")) {
       return;
     }
-    setHostEditorContent(hostFile.path, disk.content, disk.hash);
+    setHostEditorContent(hostFile.path, disk.content, disk.hash, disk.mtime);
   });
 
   async function openHostFile(path) {
@@ -829,7 +857,7 @@ graph TD
     }
     try {
       const { data } = await hostApi(hostFileUrl(path));
-      setHostEditorContent(data.path, data.content, data.hash);
+      setHostEditorContent(data.path, data.content, data.hash, data.mtime);
       hostFilesModal.hide();
     } catch (e) {
       console.error("Opening host file failed:", e);
@@ -854,6 +882,7 @@ graph TD
         return;
       }
       file.hash = data.hash;
+      file.mtime = data.mtime;
       file.savedContent = content;
       file.disk = null;
       updateHostUi();
@@ -878,7 +907,7 @@ graph TD
       return;
     }
     hostConflictModal.hide();
-    setHostEditorContent(hostFile.path, hostConflict.content, hostConflict.hash);
+    setHostEditorContent(hostFile.path, hostConflict.content, hostConflict.hash, hostConflict.mtime);
   });
 
   // Re-fetch on every open: the agent keeps creating files
