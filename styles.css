@@ -1513,7 +1513,38 @@ body::after {
    HOST MODE - file label, picker and conflict modals
    ======================================== */
 
+/* Keep the left header clear of the centered view-mode switch; the stats hide when they don't fit */
+.header-left {
+  container: header-left / inline-size;
+  min-width: 0;
+  max-width: calc(50% - 160px);
+}
+
+.header-left > * {
+  flex-shrink: 0;
+}
+
+@container header-left (max-width: 440px) {
+  .host-file-label {
+    display: none !important;
+  }
+}
+
+@container header-left (max-width: 640px) {
+  .stats-container {
+    display: none !important;
+  }
+}
+
+@container header-left (max-width: 900px) {
+  .host-file-label:not([hidden]) ~ .stats-container {
+    display: none !important;
+  }
+}
+
 .host-file-label {
+  flex-shrink: 1 !important;
+  min-width: 0;
   max-width: 28ch;
   overflow: hidden;
   text-overflow: ellipsis;

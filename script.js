@@ -1608,7 +1608,7 @@ graph TD
     const originalText = exportPdf.innerHTML;
 
     try {
-      exportPdf.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating...';
+      exportPdf.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Generating...';
       exportPdf.classList.add("is-busy");
       overlay = createStatusOverlay("Preparing PDF...");
 

@@ -200,7 +200,7 @@ python3 server.py --root /path/to/notes [--port 8000] [--bind 0.0.0.0]
 - `--root` (required): the folder whose files are exposed.
 - `--port` (default `8000`) and `--bind` (default `0.0.0.0`, all interfaces).
 
-When the app detects the server it shows **Host files** (tree view plus fuzzy search) and **Save** (also `Ctrl/Cmd+S`) in the toolbar, and the path of the open file in the header (prefixed with `•` while there are unsaved changes). Only `.md` / `.markdown` files under `--root` are listed, read or written; hidden directories and `node_modules` are skipped, and paths escaping the root (`..`, absolute paths, symlinks) are rejected. Import, drag-and-drop and Export keep working as usual, and served any other way the app behaves exactly as before.
+When the app detects the server it adds **Open** (tree view plus fuzzy search) and **Save** (also `Ctrl/Cmd+S`) to the **File** menu, and the path of the open file in the header (prefixed with `•` while there are unsaved changes). Only `.md` / `.markdown` files under `--root` are listed, read or written; hidden directories and `node_modules` are skipped, and paths escaping the root (`..`, absolute paths, symlinks) are rejected. Import, drag-and-drop and Export keep working as usual, and served any other way the app behaves exactly as before.
 
 Saving never silently overwrites changes made on disk. If the file changed since you opened it, a dialog offers to **Overwrite** it with your version, **Load disk version** (discarding your edits), or **Cancel**.
 
@@ -215,7 +215,7 @@ Saving never silently overwrites changes made on disk. If the file changed since
 2. The preview updates automatically.
 3. Switch view modes with the header buttons.
 4. Toggle sync scrolling when in split view.
-5. Import or export files using the toolbar.
+5. Import or export files from the **File** menu.
 
 ---
 
