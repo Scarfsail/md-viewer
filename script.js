@@ -66,6 +66,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const mobileHostOpenBtn     = document.getElementById("mobile-host-open-button");
   const mobileHostSaveBtn     = document.getElementById("mobile-host-save-button");
   const hostFileLabel         = document.getElementById("host-file-label");
+  const hostDiskChanged       = document.getElementById("host-disk-changed");
   const hostFilesModalElement = document.getElementById("host-files-modal");
   const hostRootName          = document.getElementById("host-root-name");
   const hostFileSearch        = document.getElementById("host-file-search");
@@ -76,7 +77,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const hostConflictModalElement = document.getElementById("host-conflict-modal");
   const hostConflictModal = new bootstrap.Modal(hostConflictModalElement);
   let hostMode = false;
-  let hostFile = null; // { path, hash, savedContent } of the open host file
+  let hostFile = null; // { path, hash, eol, savedContent, disk } of the open host file; disk is null | { hash, content } | "deleted"
   let hostFiles = [];
   let hostConflict = null; // { hash, content } from the last 409
 
@@ -733,18 +734,94 @@ graph TD
     hostFileLabel.hidden = hostFile === null;
     hostFileLabel.textContent = hostFile ? (isHostFileDirty() ? "• " : "") + hostFile.path : "";
     hostFileLabel.title = hostFile ? hostFile.path : "";
+    hostDiskChanged.hidden = !hostFile?.disk;
+    if (hostFile?.disk) {
+      const label = hostFile.disk === "deleted" ? "File was deleted on disk" : "File changed on disk — click to load it";
+      hostDiskChanged.title = label;
+      hostDiskChanged.setAttribute("aria-label", label);
+    }
   }
 
   // Textarea normalizes line endings to LF, so savedContent is read back from the
   // editor and CRLF files get their line endings restored on save
-  function setHostEditorContent(path, content, hash) {
+  function setHostEditorContent(path, content, hash, { preserveView = false } = {}) {
+    let view = null;
+    if (preserveView) {
+      view = {
+        editorScrollTop: editorPane.scrollTop,
+        selectionStart: markdownEditor.selectionStart,
+        selectionEnd: markdownEditor.selectionEnd,
+        previewScrollTop: previewPane.scrollTop,
+      };
+    }
     markdownEditor.value = content;
     renderMarkdown();
-    dropzone.style.display = "none";
+    if (view) {
+      editorPane.scrollTop = view.editorScrollTop;
+      const len = markdownEditor.value.length;
+      markdownEditor.selectionStart = Math.min(view.selectionStart, len);
+      markdownEditor.selectionEnd = Math.min(view.selectionEnd, len);
+      previewPane.scrollTop = view.previewScrollTop;
+    } else {
+      dropzone.style.display = "none";
+    }
     const eol = content.includes("\r\n") ? "\r\n" : "\n";
-    hostFile = { path, hash, eol, savedContent: markdownEditor.value };
+    hostFile = { path, hash, eol, savedContent: markdownEditor.value, disk: null };
     updateHostUi();
   }
+
+  const HOST_POLL_INTERVAL = 2000;
+
+  // Polls the open host file for changes on disk. Live-applies them while the editor
+  // is unmodified; otherwise records them on hostFile.disk for the icon to surface.
+  async function pollHostFile() {
+    if (hostFile === null || document.visibilityState !== "visible") return;
+    const file = hostFile;
+    const baseHash = file.hash;
+    let res;
+    try {
+      res = await fetch(hostFileUrl(file.path));
+    } catch (e) {
+      console.warn("Polling host file failed:", e);
+      return;
+    }
+    if (file !== hostFile || file.hash !== baseHash) return;
+    if (res.status === 404) {
+      file.disk = "deleted";
+      updateHostUi();
+      return;
+    }
+    if (!res.ok) {
+      console.warn("Polling host file failed:", res.status, res.statusText);
+      return;
+    }
+    const data = await res.json();
+    if (file !== hostFile || file.hash !== baseHash) return;
+    if (data.hash === file.hash) {
+      file.disk = null;
+    } else if (!isHostFileDirty()) {
+      setHostEditorContent(file.path, data.content, data.hash, { preserveView: true });
+      return;
+    } else {
+      file.disk = { hash: data.hash, content: data.content };
+    }
+    updateHostUi();
+  }
+
+  setInterval(pollHostFile, HOST_POLL_INTERVAL);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") pollHostFile();
+  });
+
+  hostDiskChanged.addEventListener("click", function () {
+    if (!hostFile || hostFile.disk === null) return;
+    const disk = hostFile.disk;
+    if (disk === "deleted") return;
+    if (isHostFileDirty() && !confirm("Discard your edits and load the version on disk?")) {
+      return;
+    }
+    setHostEditorContent(hostFile.path, disk.content, disk.hash);
+  });
 
   async function openHostFile(path) {
     if (isHostFileDirty() && !confirm(`Discard unsaved changes to ${hostFile.path}?`)) {
@@ -778,6 +855,7 @@ graph TD
       }
       file.hash = data.hash;
       file.savedContent = content;
+      file.disk = null;
       updateHostUi();
     } catch (e) {
       console.error("Save failed:", e);
