@@ -1508,3 +1508,104 @@ body::after {
 .markdown-body {
   filter: none;
 }
+
+/* ========================================
+   HOST MODE - file label, picker and conflict modals
+   ======================================== */
+
+.host-file-label {
+  max-width: 28ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-color);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 5px 10px;
+  box-shadow: var(--shadow-sm);
+}
+
+.modal-content {
+  background-color: var(--surface);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lg);
+}
+
+.modal-header,
+.modal-footer {
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .btn-close {
+  filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+.host-file-search,
+.host-file-search:focus {
+  background-color: var(--editor-bg);
+  color: var(--text-color);
+  border-color: var(--border-color);
+}
+
+.host-file-search:focus {
+  box-shadow: 0 0 0 0.2rem rgba(var(--accent-rgb), 0.25);
+}
+
+.host-file-search::placeholder {
+  color: color-mix(in srgb, var(--text-color), transparent 45%);
+}
+
+.host-file-list {
+  margin-top: 0.75rem;
+}
+
+.host-tree-dir > summary {
+  padding: 5px 10px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.host-tree-dir > :not(summary) {
+  margin-left: 1.25rem;
+}
+
+.host-file-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-color);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  text-align: left;
+  word-break: break-all;
+}
+
+.host-file-item:hover {
+  background-color: var(--button-hover);
+}
+
+.host-file-item.active {
+  background-color: var(--button-active);
+}
+
+.host-file-item mark {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.host-file-empty {
+  margin: 0.5rem 10px;
+  opacity: 0.7;
+}

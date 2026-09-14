@@ -60,6 +60,26 @@ document.addEventListener("DOMContentLoaded", function () {
   const mobileCopyMarkdown  = document.getElementById("mobile-copy-markdown");
   const mobileThemeToggle   = document.getElementById("mobile-theme-toggle");
 
+  // Host mode elements (server.py API)
+  const hostOpenButton        = document.getElementById("host-open-button");
+  const hostSaveButton        = document.getElementById("host-save-button");
+  const mobileHostOpenBtn     = document.getElementById("mobile-host-open-button");
+  const mobileHostSaveBtn     = document.getElementById("mobile-host-save-button");
+  const hostFileLabel         = document.getElementById("host-file-label");
+  const hostFilesModalElement = document.getElementById("host-files-modal");
+  const hostRootName          = document.getElementById("host-root-name");
+  const hostFileSearch        = document.getElementById("host-file-search");
+  const hostFileList          = document.getElementById("host-file-list");
+  const hostConflictLoad      = document.getElementById("host-conflict-load");
+  const hostConflictOverwrite = document.getElementById("host-conflict-overwrite");
+  const hostFilesModal = new bootstrap.Modal(hostFilesModalElement);
+  const hostConflictModalElement = document.getElementById("host-conflict-modal");
+  const hostConflictModal = new bootstrap.Modal(hostConflictModalElement);
+  let hostMode = false;
+  let hostFile = null; // { path, hash, savedContent } of the open host file
+  let hostFiles = [];
+  let hostConflict = null; // { hash, content } from the last 409
+
   // Check dark mode preference first for proper initialization
   const prefersDarkMode =
     window.matchMedia &&
@@ -239,6 +259,9 @@ graph TD
       markdownEditor.value = e.target.result;
       renderMarkdown();
       dropzone.style.display = "none";
+      // A browser-local file must never be saved over the previous host file
+      hostFile = null;
+      updateHostUi();
     };
     reader.readAsText(file);
   }
@@ -572,6 +595,11 @@ graph TD
     }
   });
   mobileImportBtn.addEventListener("click", () => fileInput.click());
+  mobileHostOpenBtn.addEventListener("click", () => {
+    closeMobileMenu();
+    hostOpenButton.click();
+  });
+  mobileHostSaveBtn.addEventListener("click", () => hostSaveButton.click());
   mobileExportMd.addEventListener("click", () => exportMd.click());
   mobileExportHtml.addEventListener("click", () => exportHtml.click());
   mobileExportPdf.addEventListener("click", () => exportPdf.click());
@@ -608,6 +636,7 @@ graph TD
   });
 
   markdownEditor.addEventListener("input", debouncedRender);
+  markdownEditor.addEventListener("input", updateHostUi);
   
   // Tab key handler to insert indentation instead of moving focus
   markdownEditor.addEventListener("keydown", function(e) {
@@ -662,6 +691,263 @@ graph TD
     }
     this.value = "";
   });
+
+  // ========================================
+  // HOST MODE - open/save files via server.py
+  // ========================================
+
+  // The API only exists when served by server.py; static hosting 404s here
+  fetch("api/files")
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data) => {
+      if (data && Array.isArray(data.files)) {
+        hostMode = true;
+        updateHostUi();
+      }
+    })
+    .catch(() => {});
+
+  // Returns { status, data }; throws for anything but success or a 409 conflict
+  async function hostApi(url, options) {
+    const res = await fetch(url, options);
+    const data = await res.json();
+    if (!res.ok && res.status !== 409) {
+      throw new Error(data.error || res.statusText);
+    }
+    return { status: res.status, data };
+  }
+
+  function hostFileUrl(path) {
+    return "api/file?path=" + encodeURIComponent(path);
+  }
+
+  function isHostFileDirty() {
+    return hostFile !== null && markdownEditor.value !== hostFile.savedContent;
+  }
+
+  function updateHostUi() {
+    hostOpenButton.hidden = !hostMode;
+    mobileHostOpenBtn.hidden = !hostMode;
+    hostSaveButton.hidden = hostFile === null;
+    mobileHostSaveBtn.hidden = hostFile === null;
+    hostFileLabel.hidden = hostFile === null;
+    hostFileLabel.textContent = hostFile ? (isHostFileDirty() ? "• " : "") + hostFile.path : "";
+    hostFileLabel.title = hostFile ? hostFile.path : "";
+  }
+
+  // Textarea normalizes line endings to LF, so savedContent is read back from the
+  // editor and CRLF files get their line endings restored on save
+  function setHostEditorContent(path, content, hash) {
+    markdownEditor.value = content;
+    renderMarkdown();
+    dropzone.style.display = "none";
+    const eol = content.includes("\r\n") ? "\r\n" : "\n";
+    hostFile = { path, hash, eol, savedContent: markdownEditor.value };
+    updateHostUi();
+  }
+
+  async function openHostFile(path) {
+    if (isHostFileDirty() && !confirm(`Discard unsaved changes to ${hostFile.path}?`)) {
+      return;
+    }
+    try {
+      const { data } = await hostApi(hostFileUrl(path));
+      setHostEditorContent(data.path, data.content, data.hash);
+      hostFilesModal.hide();
+    } catch (e) {
+      console.error("Opening host file failed:", e);
+      alert("Opening file failed: " + e.message);
+    }
+  }
+
+  async function saveHostFile(baseHash = hostFile.hash) {
+    // Keep a reference: another file may be opened while the request is in flight
+    const file = hostFile;
+    const content = markdownEditor.value;
+    try {
+      const { status, data } = await hostApi(hostFileUrl(file.path), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: content.replaceAll("\n", file.eol), base_hash: baseHash }),
+      });
+      if (file !== hostFile) return;
+      if (status === 409) {
+        hostConflict = data;
+        hostConflictModal.show();
+        return;
+      }
+      file.hash = data.hash;
+      file.savedContent = content;
+      updateHostUi();
+    } catch (e) {
+      console.error("Save failed:", e);
+      alert("Save failed: " + e.message);
+    }
+  }
+
+  hostOpenButton.addEventListener("click", () => hostFilesModal.show());
+  hostSaveButton.addEventListener("click", () => saveHostFile());
+
+  // Wait until the modal has fully closed so a repeated conflict can reopen it
+  hostConflictOverwrite.addEventListener("click", function () {
+    const { hash } = hostConflict;
+    hostConflictModalElement.addEventListener("hidden.bs.modal", () => saveHostFile(hash), { once: true });
+    hostConflictModal.hide();
+  });
+
+  hostConflictLoad.addEventListener("click", function () {
+    if (!confirm("Discard your edits and load the version on disk?")) {
+      return;
+    }
+    hostConflictModal.hide();
+    setHostEditorContent(hostFile.path, hostConflict.content, hostConflict.hash);
+  });
+
+  // Re-fetch on every open: the agent keeps creating files
+  hostFilesModalElement.addEventListener("show.bs.modal", async function () {
+    hostFileSearch.value = "";
+    try {
+      const { data } = await hostApi("api/files");
+      hostRootName.textContent = data.root;
+      hostFiles = data.files;
+      renderHostFileList();
+    } catch (e) {
+      console.error("Listing host files failed:", e);
+      alert("Listing files failed: " + e.message);
+    }
+  });
+
+  hostFilesModalElement.addEventListener("shown.bs.modal", () => hostFileSearch.focus());
+  hostFileSearch.addEventListener("input", renderHostFileList);
+
+  hostFileSearch.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      moveHostSelection(e.key === "ArrowDown" ? 1 : -1);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const selected = hostFileList.querySelector(".host-file-item.active");
+      if (selected) selected.click();
+    }
+  });
+
+  // Case-insensitive subsequence match; returns null or { score, positions }
+  function fuzzyScore(query, path) {
+    const q = query.toLowerCase();
+    const p = path.toLowerCase();
+    const basenameStart = p.lastIndexOf("/") + 1;
+    const positions = [];
+    let score = 0;
+    let index = 0;
+    for (const char of q) {
+      index = p.indexOf(char, index);
+      if (index === -1) return null;
+      score += 1;
+      if (positions.length && positions[positions.length - 1] === index - 1) {
+        score += 5; // consecutive run
+      }
+      if (index === basenameStart || "/-_.".includes(p[index - 1])) {
+        score += 3; // word boundary
+      }
+      positions.push(index);
+      index++;
+    }
+    return { score, positions };
+  }
+
+  function renderHostFileList() {
+    const query = hostFileSearch.value.trim();
+    hostFileList.replaceChildren();
+
+    if (query) {
+      hostFiles
+        .map((path) => ({ path, match: fuzzyScore(query, path) }))
+        .filter((result) => result.match)
+        .sort((a, b) => b.match.score - a.match.score || a.path.length - b.path.length)
+        .forEach((result) => {
+          hostFileList.appendChild(createHostFileItem(result.path, highlightMatches(result.path, result.match.positions)));
+        });
+    } else {
+      renderHostTree(buildHostTree(hostFiles), hostFileList);
+    }
+
+    if (!hostFileList.hasChildNodes()) {
+      const empty = document.createElement("p");
+      empty.className = "host-file-empty";
+      empty.textContent = query ? "No matching files" : "No Markdown files found";
+      hostFileList.appendChild(empty);
+    }
+    moveHostSelection(0);
+  }
+
+  function buildHostTree(paths) {
+    const root = { dirs: new Map(), files: [] };
+    paths.forEach((path) => {
+      let node = root;
+      path.split("/").slice(0, -1).forEach((dir) => {
+        if (!node.dirs.has(dir)) {
+          node.dirs.set(dir, { dirs: new Map(), files: [] });
+        }
+        node = node.dirs.get(dir);
+      });
+      node.files.push(path);
+    });
+    return root;
+  }
+
+  function renderHostTree(node, container) {
+    node.dirs.forEach((child, name) => {
+      const details = document.createElement("details");
+      details.className = "host-tree-dir";
+      details.open = true;
+      const summary = document.createElement("summary");
+      summary.innerHTML = '<i class="bi bi-folder me-2"></i>';
+      summary.append(name);
+      details.appendChild(summary);
+      renderHostTree(child, details);
+      container.appendChild(details);
+    });
+    node.files.forEach((path) => {
+      container.appendChild(createHostFileItem(path, document.createTextNode(path.split("/").pop())));
+    });
+  }
+
+  function highlightMatches(path, positions) {
+    const fragment = document.createDocumentFragment();
+    for (let i = 0; i < path.length; i++) {
+      if (positions.includes(i)) {
+        const mark = document.createElement("mark");
+        mark.textContent = path[i];
+        fragment.appendChild(mark);
+      } else {
+        fragment.appendChild(document.createTextNode(path[i]));
+      }
+    }
+    return fragment;
+  }
+
+  function createHostFileItem(path, label) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "host-file-item";
+    item.title = path;
+    item.innerHTML = '<i class="bi bi-file-earmark-text me-2"></i>';
+    item.append(label);
+    item.addEventListener("click", () => openHostFile(path));
+    return item;
+  }
+
+  // Moves the highlighted row among files not hidden inside a collapsed folder
+  function moveHostSelection(delta) {
+    const items = [...hostFileList.querySelectorAll(".host-file-item")]
+      .filter((item) => !item.parentElement.closest("details:not([open])"));
+    const current = items.findIndex((item) => item.classList.contains("active"));
+    hostFileList.querySelectorAll(".host-file-item.active").forEach((item) => item.classList.remove("active"));
+    if (!items.length) return;
+    const next = current === -1 ? 0 : Math.min(Math.max(current + delta, 0), items.length - 1);
+    items[next].classList.add("active");
+    items[next].scrollIntoView({ block: "nearest" });
+  }
 
   function createStatusOverlay(message) {
     const overlay = document.createElement("div");
@@ -1598,7 +1884,11 @@ graph TD
   document.addEventListener("keydown", function (e) {
     if ((e.ctrlKey || e.metaKey) && e.key === "s") {
       e.preventDefault();
-      exportMd.click();
+      if (hostFile) {
+        saveHostFile();
+      } else {
+        exportMd.click();
+      }
     }
     if ((e.ctrlKey || e.metaKey) && e.key === "c") {
       e.preventDefault();

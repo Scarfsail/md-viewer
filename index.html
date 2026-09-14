@@ -58,6 +58,7 @@
                             <i class="bi bi-fonts me-1"></i> <span id="char-count">0</span> Chars
                         </div>
                     </div>
+                    <span id="host-file-label" class="host-file-label ms-3" hidden></span>
                 </div>
 
                 <!-- Center section: View Mode Buttons -->
@@ -85,6 +86,12 @@
                         <i class="bi bi-upload"></i> Import
                     </button>
                     <input type="file" id="file-input" class="file-input" accept=".md,.markdown,text/markdown">
+                    <button id="host-open-button" class="tool-button" title="Open a Markdown file from the host" hidden>
+                        <i class="bi bi-hdd"></i> Host files
+                    </button>
+                    <button id="host-save-button" class="tool-button" title="Save to host file (Ctrl+S)" hidden>
+                        <i class="bi bi-save"></i> Save
+                    </button>
                     
                     <div class="dropdown">
                         <button class="tool-button dropdown-toggle" type="button" id="exportDropdown" data-bs-toggle="dropdown" aria-expanded="false">
@@ -156,6 +163,14 @@
                             <button id="mobile-import-button" class="mobile-menu-item" title="Import Markdown">
                                 <i class="bi bi-upload me-2"></i> Import Markdown
                             </button>
+
+                            <button id="mobile-host-open-button" class="mobile-menu-item" title="Open a Markdown file from the host" hidden>
+                                <i class="bi bi-hdd me-2"></i> Host files
+                            </button>
+
+                            <button id="mobile-host-save-button" class="mobile-menu-item" title="Save to host file" hidden>
+                                <i class="bi bi-save me-2"></i> Save
+                            </button>
                             
                             <button id="mobile-export-md" class="mobile-menu-item" title="Export as Markdown">
                                 <i class="bi bi-file-earmark-text me-2"></i> Export as Markdown
@@ -203,6 +218,40 @@
                 <div id="markdown-preview" class="markdown-body"></div>
             </div>
         </main>
+    </div>
+
+    <!-- Host mode: file picker (only reachable when server.py is serving the app) -->
+    <div class="modal fade" id="host-files-modal" tabindex="-1" aria-labelledby="host-files-title" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="host-files-title"><i class="bi bi-hdd me-2"></i><span id="host-root-name">Host files</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="search" id="host-file-search" class="form-control host-file-search" placeholder="Search files..." autocomplete="off" aria-label="Search files">
+                    <div id="host-file-list" class="host-file-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Host mode: save conflict -->
+    <div class="modal fade" id="host-conflict-modal" tabindex="-1" aria-labelledby="host-conflict-title" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="host-conflict-title"><i class="bi bi-exclamation-triangle me-2"></i>Save conflict</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">This file changed on disk since you opened it.</div>
+                <div class="modal-footer">
+                    <button type="button" class="tool-button" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" id="host-conflict-load" class="tool-button">Load disk version</button>
+                    <button type="button" id="host-conflict-overwrite" class="tool-button">Overwrite</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
