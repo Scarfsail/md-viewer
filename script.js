@@ -153,65 +153,9 @@ document.addEventListener("DOMContentLoaded", function () {
     },
   });
 
-  const sampleMarkdown = `# Markdown Viewer - Getting Started
-
-## 🚀 Quick Start Guide
-- **Instant Preview** with real-time rendering
-- **Multiple Export Formats** (Markdown, HTML, PDF)
-- **Diagram Support** using Mermaid
-- **Mathematical Equations** with LaTeX
-- **Emoji Integration** 🎉 ✨ 🔥
-
-## 📝 JavaScript Example
-\`\`\`javascript
-const greeting = (name) => {
-  console.log(\`Hello, \${name}!\`);
-  return true;
-};
-
-greeting("World");
-\`\`\`
-
-## 🔢 Math Equations
-Pythagorean theorem: $$a^2 + b^2 = c^2$$
-
-Integration formula:
-$$\\int_a^b f(x)\\,dx = F(b) - F(a)$$
-
-## 📈 Workflow Diagram
-\`\`\`mermaid
-graph TD
-    A[Write Markdown] --> B[Live Preview]
-    B --> C{Satisfied?}
-    C -->|Yes| D[Export]
-    C -->|No| A
-\`\`\`
-
-## ✅ Checklist
-- [x] Setup editor interface
-- [x] Enable live preview
-- [x] Add export functionality
-- [ ] Mobile optimization
-
-## 📊 Comparison Table
-
-| Feature | Status | Priority |
-|---------|--------|----------|
-| Preview | ✅ Ready | High |
-| Export | ✅ Ready | High |
-| Sync | ✅ Ready | Medium |
-
----
-
-**Created with ❤️ for markdown enthusiasts**`;
-
-  // A URL naming a host file gets first chance at the editor — don't flash the sample
-  // doc first, only to immediately replace it once the host file loads.
+  // A URL naming a host file gets first chance at the editor — don't flash empty
+  // content first, only to immediately replace it once the host file loads.
   const pendingHostPath = getUrlPath();
-
-  if (!pendingHostPath) {
-    markdownEditor.value = sampleMarkdown;
-  }
 
   function renderMarkdown() {
     try {
@@ -623,7 +567,7 @@ graph TD
   });
   
   // A pending host file replaces the empty editor shortly; rendering it now would just
-  // be an extra blank flash before that happens (or before the sample-doc fallback below).
+  // be an extra blank flash before that happens.
   if (!pendingHostPath) {
     renderMarkdown();
     updateMobileStats();
@@ -735,10 +679,9 @@ graph TD
     .catch(() => {})
     .finally(() => {
       // Nothing ended up loaded for a pending path — no host mode, or the file failed to
-      // open — and nothing else has since claimed the editor, so show the sample doc the
-      // initial synchronous render skipped for it.
+      // open — and nothing else has since claimed the editor, so render the empty editor
+      // the initial synchronous render skipped for it.
       if (pendingHostPath && hostFile === null && editorGeneration === startupGeneration) {
-        markdownEditor.value = sampleMarkdown;
         renderMarkdown();
         updateMobileStats();
       }
