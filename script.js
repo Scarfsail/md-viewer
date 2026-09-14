@@ -80,6 +80,10 @@ document.addEventListener("DOMContentLoaded", function () {
   let hostFile = null; // { path, hash, mtime, eol, savedContent, disk } of the open host file; disk is null | { hash, content } | "deleted"
   let hostFiles = [];
   let hostConflict = null; // { hash, content } from the last 409
+  // Bumped by every action that decides what belongs in the editor (importing a local
+  // file, opening a host file). Lets an in-flight openHostFile notice it's been
+  // superseded by a newer action and drop its result instead of overwriting it.
+  let editorGeneration = 0;
 
   // Check dark mode preference first for proper initialization
   const prefersDarkMode =
@@ -201,7 +205,13 @@ graph TD
 
 **Created with ❤️ for markdown enthusiasts**`;
 
-  markdownEditor.value = sampleMarkdown;
+  // A URL naming a host file gets first chance at the editor — don't flash the sample
+  // doc first, only to immediately replace it once the host file loads.
+  const pendingHostPath = getUrlPath();
+
+  if (!pendingHostPath) {
+    markdownEditor.value = sampleMarkdown;
+  }
 
   function renderMarkdown() {
     try {
@@ -257,11 +267,13 @@ graph TD
   function importMarkdownFile(file) {
     const reader = new FileReader();
     reader.onload = function(e) {
+      editorGeneration++; // supersede any in-flight openHostFile (e.g. a pending ?path= auto-open)
       markdownEditor.value = e.target.result;
       renderMarkdown();
       dropzone.style.display = "none";
       // A browser-local file must never be saved over the previous host file
       hostFile = null;
+      setUrlPath(null);
       updateHostUi();
     };
     reader.readAsText(file);
@@ -610,8 +622,12 @@ graph TD
     mobileThemeToggle.innerHTML = themeToggle.innerHTML + " Toggle Dark Mode";
   });
   
-  renderMarkdown();
-  updateMobileStats();
+  // A pending host file replaces the empty editor shortly; rendering it now would just
+  // be an extra blank flash before that happens (or before the sample-doc fallback below).
+  if (!pendingHostPath) {
+    renderMarkdown();
+    updateMobileStats();
+  }
 
   // Initialize view mode - Story 1.1
   contentContainer.classList.add('view-split');
@@ -697,16 +713,36 @@ graph TD
   // HOST MODE - open/save files via server.py
   // ========================================
 
+  // Snapshot of editorGeneration for the auto-open/fallback below: if the user acts first
+  // (import, or a manual host-file open) editorGeneration moves past this value, and that
+  // other action's result is left alone instead of being overwritten.
+  let startupGeneration = editorGeneration;
+
   // The API only exists when served by server.py; static hosting 404s here
   fetch("api/files")
     .then((res) => (res.ok ? res.json() : null))
-    .then((data) => {
+    .then(async (data) => {
       if (data && Array.isArray(data.files)) {
         hostMode = true;
         updateHostUi();
+        // Only attempt the auto-open if nothing has claimed the editor since page load.
+        if (pendingHostPath && editorGeneration === startupGeneration) {
+          startupGeneration = editorGeneration + 1; // openHostFile claims this generation next
+          await openHostFile(pendingHostPath);
+        }
       }
     })
-    .catch(() => {});
+    .catch(() => {})
+    .finally(() => {
+      // Nothing ended up loaded for a pending path — no host mode, or the file failed to
+      // open — and nothing else has since claimed the editor, so show the sample doc the
+      // initial synchronous render skipped for it.
+      if (pendingHostPath && hostFile === null && editorGeneration === startupGeneration) {
+        markdownEditor.value = sampleMarkdown;
+        renderMarkdown();
+        updateMobileStats();
+      }
+    });
 
   // Returns { status, data }; throws for anything but success or a 409 conflict
   async function hostApi(url, options) {
@@ -724,6 +760,24 @@ graph TD
 
   function hostFileMetaUrl(path) {
     return "api/file-meta?path=" + encodeURIComponent(path);
+  }
+
+  function getUrlPath() {
+    return new URLSearchParams(location.search).get("path");
+  }
+
+  // Keeps the open host file's path in the URL via replaceState (not pushState — opening a
+  // file isn't something the user expects Back to step through). path === null removes it.
+  function setUrlPath(path) {
+    const params = new URLSearchParams(location.search);
+    if (path === null) {
+      params.delete("path");
+    } else {
+      params.set("path", path);
+    }
+    const query = params.toString();
+    const url = location.pathname + (query ? "?" + query : "") + location.hash;
+    history.replaceState(null, "", url);
   }
 
   function isHostFileDirty() {
@@ -771,6 +825,7 @@ graph TD
     }
     const eol = content.includes("\r\n") ? "\r\n" : "\n";
     hostFile = { path, hash, mtime, eol, savedContent: markdownEditor.value, disk: null };
+    setUrlPath(path);
     updateHostUi();
   }
 
@@ -855,13 +910,23 @@ graph TD
     if (isHostFileDirty() && !confirm(`Discard unsaved changes to ${hostFile.path}?`)) {
       return;
     }
+    // Claimed before the fetch so a competing action (import, or opening another file)
+    // that runs while this is in flight can bump the generation and get noticed below.
+    const myGeneration = ++editorGeneration;
     try {
       const { data } = await hostApi(hostFileUrl(path));
+      if (myGeneration !== editorGeneration) return; // superseded while the fetch was in flight
       setHostEditorContent(data.path, data.content, data.hash, data.mtime);
       hostFilesModal.hide();
     } catch (e) {
+      if (myGeneration !== editorGeneration) return;
       console.error("Opening host file failed:", e);
       alert("Opening file failed: " + e.message);
+      // Only the URL's own path failed to open — clear it so a reload doesn't repeat the
+      // alert forever. An already-open file's URL is left alone.
+      if (getUrlPath() === path) {
+        setUrlPath(null);
+      }
     }
   }
 
