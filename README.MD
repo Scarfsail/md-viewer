@@ -204,6 +204,8 @@ When the app detects the server it adds **Open** (tree view plus fuzzy search) a
 
 Saving never silently overwrites changes made on disk. If the file changed since you opened it, a dialog offers to **Overwrite** it with your version, **Load disk version** (discarding your edits), or **Cancel**.
 
+While the open file has no unsaved changes, it follows changes made on disk automatically — edits made by an agent or another editor appear in the editor and preview within a couple of seconds, with the scroll position kept. Once you start editing, the file is "forked": disk changes are never applied over your edits, but an icon next to the file name lights up to show the disk version has changed (or that the file was deleted), and clicking it offers to discard your edits and load the disk version.
+
 > [!WARNING]
 > `server.py` has **no authentication**. Anyone who can reach the port can read and write every Markdown file under `--root`. Put it behind a reverse proxy with authentication (e.g. nginx + Authelia) or bind it to localhost with `--bind 127.0.0.1`.
 

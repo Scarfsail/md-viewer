@@ -73,11 +73,26 @@ class ServerTest(unittest.TestCase):
     def test_get_returns_content_and_hash(self):
         status, body = self.api("GET", self.file_url("docs/b.markdown"))
         self.assertEqual(status, 200)
+        mtime = body.pop("mtime")
+        self.assertEqual(mtime, os.stat(os.path.join(self.root, "docs/b.markdown")).st_mtime)
         self.assertEqual(body, {
             "path": "docs/b.markdown",
             "content": "# B\n",
             "hash": hashlib.sha256(b"# B\n").hexdigest(),
         })
+
+    def test_meta_returns_mtime(self):
+        status, body = self.api("GET", "/api/file-meta?path=" + quote("docs/b.markdown", safe=""))
+        self.assertEqual(status, 200)
+        self.assertEqual(body, {
+            "path": "docs/b.markdown",
+            "mtime": os.stat(os.path.join(self.root, "docs/b.markdown")).st_mtime,
+        })
+
+    def test_meta_missing_file_returns_404(self):
+        status, body = self.api("GET", "/api/file-meta?path=missing.md")
+        self.assertEqual(status, 404)
+        self.assertIn("error", body)
 
     def test_non_utf8_returns_422(self):
         self.write("latin1.md", b"caf\xe9")
@@ -108,6 +123,8 @@ class ServerTest(unittest.TestCase):
         self.write("a.md", b"# Agent change\n")
         status, conflict = self.api("PUT", self.file_url("a.md"), {"content": "# Mine\n", "base_hash": body["hash"]})
         self.assertEqual(status, 409)
+        mtime = conflict.pop("mtime")
+        self.assertEqual(mtime, os.stat(os.path.join(self.root, "a.md")).st_mtime)
         self.assertEqual(conflict, {
             "hash": hashlib.sha256(b"# Agent change\n").hexdigest(),
             "content": "# Agent change\n",

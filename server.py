@@ -80,10 +80,13 @@ class Handler(SimpleHTTPRequestHandler):
         return path
 
     def read_file(self, path):
+        # mtime comes from the same open fd as the content, so the two always describe
+        # the same file state even if a concurrent write replaces the path in between.
         with open(path, "rb") as f:
             data = f.read()
+            mtime = os.fstat(f.fileno()).st_mtime
         try:
-            return data.decode("utf-8"), sha256(data)
+            return data.decode("utf-8"), sha256(data), mtime
         except UnicodeDecodeError:
             raise ApiError(422, "File is not valid UTF-8")
 
@@ -98,8 +101,11 @@ class Handler(SimpleHTTPRequestHandler):
                         files.append(os.path.relpath(os.path.join(dirpath, name), root).replace(os.sep, "/"))
             return 200, {"root": os.path.basename(root), "files": sorted(files)}
         if route == "/api/file":
-            content, file_hash = self.read_file(self.resolve_md_path(rel))
-            return 200, {"path": rel, "content": content, "hash": file_hash}
+            content, file_hash, mtime = self.read_file(self.resolve_md_path(rel))
+            return 200, {"path": rel, "content": content, "hash": file_hash, "mtime": mtime}
+        if route == "/api/file-meta":
+            mtime = os.stat(self.resolve_md_path(rel)).st_mtime
+            return 200, {"path": rel, "mtime": mtime}
         raise ApiError(404, "Unknown API endpoint")
 
     def api_put(self, route, rel):
@@ -116,9 +122,9 @@ class Handler(SimpleHTTPRequestHandler):
             raise ApiError(400, "Expected JSON body {content, base_hash}")
         # Check and write under one lock; replace atomically so readers never see a partial file
         with self.server.write_lock:
-            current_content, current_hash = self.read_file(path)
+            current_content, current_hash, current_mtime = self.read_file(path)
             if body.get("base_hash") != current_hash:
-                return 409, {"hash": current_hash, "content": current_content}
+                return 409, {"hash": current_hash, "content": current_content, "mtime": current_mtime}
             data = content.encode("utf-8")
             fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".viewmd-")
             try:
@@ -126,10 +132,13 @@ class Handler(SimpleHTTPRequestHandler):
                     f.write(data)
                 shutil.copymode(path, tmp_path)
                 os.replace(tmp_path, path)
+                # Stat while still holding the lock, so no concurrent write can land
+                # between the replace and the mtime we hand back for this one.
+                mtime = os.stat(path).st_mtime
             except BaseException:
                 os.unlink(tmp_path)
                 raise
-        return 200, {"hash": sha256(data)}
+        return 200, {"hash": sha256(data), "mtime": mtime}
 
 
 def make_server(root, bind="0.0.0.0", port=8000):
