@@ -204,13 +204,13 @@ python3 server.py --root /path/to/notes [--port 8000] [--bind 0.0.0.0]
 
 You can run host mode with Docker instead, with nothing but Docker itself needed on the host:
 
-1. Edit the `volumes:` line in `docker-compose.yml` to point at your Markdown folder (the left side of `./markdowns:/markdowns`, e.g. `/home/me/docs:/markdowns`). The folder must already exist before you start the container, otherwise Docker creates it as `root` and saves will fail to take ownership correctly.
+1. Set `MD_ROOT` in the `.env` file next to `docker-compose.yml` to your Markdown folder, e.g. `MD_ROOT=/home/me/docs` (it defaults to `./markdowns`). The folder must already exist before you start the container, otherwise Docker creates it as `root` and saves will fail to take ownership correctly.
 2. Run `docker compose up -d --build`.
 3. Open http://localhost:8000.
 4. `docker compose down` stops it.
 5. To update after pulling changes: `git pull && docker compose up -d --build`.
 
-Files saved through the app are written as UID/GID `1000:1000` by default, so they end up owned by root/another user if your host account uses a different one. If so, `export UID; export GID=$(id -g)` before running `docker compose up` (bash sets `UID` automatically but not `GID`), or put `UID=...` and `GID=...` in a `.env` file next to `docker-compose.yml`.
+Files saved through the app are written as UID/GID `1000:1000` by default, so they end up owned by root/another user if your host account uses a different one. If so, add `UID=...` and `GID=...` to the same `.env` file, or `export UID; export GID=$(id -g)` before running `docker compose up` (bash sets `UID` automatically but not `GID`).
 
 The same no-authentication warning below applies when running via Docker.
 

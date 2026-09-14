@@ -6,9 +6,9 @@ services:
       # localhost (the server has no authentication, see README.MD).
       - "8000:8000"
     volumes:
-      # Left side is the host folder to expose; can be any absolute path,
-      # e.g. "/home/me/docs:/markdowns".
-      - "./markdowns:/markdowns"
+      # MD_ROOT is the host folder to expose; set it in .env or export it
+      # before running, e.g. MD_ROOT=/home/me/docs. Defaults to ./markdowns.
+      - "${MD_ROOT:-./markdowns}:/markdowns"
     user: "${UID:-1000}:${GID:-1000}"
     init: true
     restart: unless-stopped
