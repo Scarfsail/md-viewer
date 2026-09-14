@@ -47,6 +47,22 @@
                     <a href="https://github.com/akshitsutharr/md-viewer/" class="github-link ms-3" title="View on GitHub" target="_blank" rel="noopener noreferrer">
                         <i class="bi bi-github"></i>
                     </a>
+                    <div class="dropdown file-menu me-3 d-none d-md-block">
+                        <button class="tool-button dropdown-toggle" type="button" id="fileDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-folder2-open"></i> File
+                        </button>
+                        <ul class="dropdown-menu" aria-labelledby="fileDropdown">
+                            <li><button class="dropdown-item" type="button" id="host-open-button" title="Open a Markdown file from the host" hidden><i class="bi bi-folder2-open me-2"></i>Open...</button></li>
+                            <li><button class="dropdown-item" type="button" id="host-save-button" title="Save to host file (Ctrl+S)" hidden><i class="bi bi-save me-2"></i>Save</button></li>
+                            <li><button class="dropdown-item" type="button" id="import-button" title="Import Markdown from this computer"><i class="bi bi-upload me-2"></i>Import...</button></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" id="export-md"><i class="bi bi-file-earmark-text me-2"></i>Export as Markdown</a></li>
+                            <li><a class="dropdown-item" href="#" id="export-html"><i class="bi bi-filetype-html me-2"></i>Export as HTML</a></li>
+                            <li><a class="dropdown-item" href="#" id="export-pdf"><i class="bi bi-file-earmark-pdf me-2"></i>Export as PDF</a></li>
+                        </ul>
+                        <input type="file" id="file-input" class="file-input" accept=".md,.markdown,text/markdown">
+                    </div>
+                    <span id="host-file-label" class="host-file-label me-3" hidden></span>
                     <div id="stats-container" class="stats-container d-flex align-items-center d-none d-lg-flex">
                         <div class="stat-item me-3">
                             <i class="bi bi-clock me-1"></i> <span id="reading-time">0</span> Min Read
@@ -81,22 +97,6 @@
                     <button id="toggle-sync" class="tool-button sync-enabled border-primary" title="Toggle Sync Scrolling">
                         <i class="bi bi-link"></i> Sync Off
                     </button>
-                    <button id="import-button" class="tool-button" title="Import Markdown">
-                        <i class="bi bi-upload"></i> Import
-                    </button>
-                    <input type="file" id="file-input" class="file-input" accept=".md,.markdown,text/markdown">
-                    
-                    <div class="dropdown">
-                        <button class="tool-button dropdown-toggle" type="button" id="exportDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="bi bi-download"></i> Export
-                        </button>
-                        <ul class="dropdown-menu" aria-labelledby="exportDropdown">
-                            <li><a class="dropdown-item" href="#" id="export-md">Markdown (.md)</a></li>
-                            <li><a class="dropdown-item" href="#" id="export-html">HTML</a></li>
-                            <li><a class="dropdown-item" href="#" id="export-pdf">PDF</a></li>
-                        </ul>
-                    </div>
-                    
                     <button id="copy-markdown-button" class="tool-button" title="Copy Markdown">
                         <i class="bi bi-clipboard"></i> Copy
                     </button>
@@ -156,6 +156,14 @@
                             <button id="mobile-import-button" class="mobile-menu-item" title="Import Markdown">
                                 <i class="bi bi-upload me-2"></i> Import Markdown
                             </button>
+
+                            <button id="mobile-host-open-button" class="mobile-menu-item" title="Open a Markdown file from the host" hidden>
+                                <i class="bi bi-folder2-open me-2"></i> Open
+                            </button>
+
+                            <button id="mobile-host-save-button" class="mobile-menu-item" title="Save to host file" hidden>
+                                <i class="bi bi-save me-2"></i> Save
+                            </button>
                             
                             <button id="mobile-export-md" class="mobile-menu-item" title="Export as Markdown">
                                 <i class="bi bi-file-earmark-text me-2"></i> Export as Markdown
@@ -203,6 +211,40 @@
                 <div id="markdown-preview" class="markdown-body"></div>
             </div>
         </main>
+    </div>
+
+    <!-- Host mode: file picker (only reachable when server.py is serving the app) -->
+    <div class="modal fade" id="host-files-modal" tabindex="-1" aria-labelledby="host-files-title" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="host-files-title"><i class="bi bi-folder2-open me-2"></i><span id="host-root-name">Open</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="search" id="host-file-search" class="form-control host-file-search" placeholder="Search files..." autocomplete="off" aria-label="Search files">
+                    <div id="host-file-list" class="host-file-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Host mode: save conflict -->
+    <div class="modal fade" id="host-conflict-modal" tabindex="-1" aria-labelledby="host-conflict-title" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="host-conflict-title"><i class="bi bi-exclamation-triangle me-2"></i>Save conflict</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">This file changed on disk since you opened it.</div>
+                <div class="modal-footer">
+                    <button type="button" class="tool-button" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" id="host-conflict-load" class="tool-button">Load disk version</button>
+                    <button type="button" id="host-conflict-overwrite" class="tool-button">Overwrite</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
