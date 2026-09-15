@@ -194,11 +194,11 @@ You can also open `index.html` directly without a server.
 To browse, edit and save Markdown files that live on the machine running the server (for example files written by an agent), start the bundled companion server instead (Python 3 stdlib, nothing to install):
 
 ```bash
-python3 server.py --root /path/to/notes [--port 8000] [--bind 0.0.0.0]
+python3 server.py --root /path/to/notes [--port 8000] [--bind 127.0.0.1]
 ```
 
 - `--root` (required): the folder whose files are exposed.
-- `--port` (default `8000`) and `--bind` (default `0.0.0.0`, all interfaces).
+- `--port` (default `8000`) and `--bind` (default `127.0.0.1`, localhost-only; pass `--bind 0.0.0.0` to accept connections from other machines).
 
 #### Docker
 
@@ -211,6 +211,8 @@ You can run host mode with Docker instead, with nothing but Docker itself needed
 5. To update after pulling changes: `git pull && docker compose up -d --build`.
 
 Files saved through the app are written as UID/GID `1000:1000` by default, so they end up owned by root/another user if your host account uses a different one. If so, add `UID=...` and `GID=...` to the same `.env` file, or `export UID; export GID=$(id -g)` before running `docker compose up` (bash sets `UID` automatically but not `GID`).
+
+The container itself always binds to `0.0.0.0` internally (required for the port mapping to work at all); what actually controls host-network exposure is the `ports` line in `docker-compose.yml` — use `"127.0.0.1:8000:8000"` there to restrict access to localhost, or the default `"8000:8000"` to accept connections from other machines. `BIND` in `.env` overrides the container's internal bind address directly, for advanced setups only.
 
 The same no-authentication warning below applies when running via Docker.
 

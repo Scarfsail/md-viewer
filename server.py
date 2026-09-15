@@ -141,7 +141,7 @@ class Handler(SimpleHTTPRequestHandler):
         return 200, {"hash": sha256(data), "mtime": mtime}
 
 
-def make_server(root, bind="0.0.0.0", port=8000):
+def make_server(root, bind="127.0.0.1", port=8000):
     server = ThreadingHTTPServer((bind, port), partial(Handler, directory=APP_DIR))
     server.root = root
     server.write_lock = threading.Lock()
@@ -152,7 +152,7 @@ def main():
     parser = argparse.ArgumentParser(description="Serve ViewMD with read/write access to Markdown files under --root.")
     parser.add_argument("--root", required=True, help="folder whose .md/.markdown files are exposed")
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--bind", default="0.0.0.0")
+    parser.add_argument("--bind", default="127.0.0.1", help="interface to bind to (default 127.0.0.1, localhost-only; use 0.0.0.0 for all interfaces)")
     args = parser.parse_args()
 
     root = os.path.realpath(args.root)

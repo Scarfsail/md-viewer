@@ -9,6 +9,12 @@ services:
       # MD_ROOT is the host folder to expose; set it in .env or export it
       # before running, e.g. MD_ROOT=/home/me/docs. Defaults to ./markdowns.
       - "${MD_ROOT:-./markdowns}:/markdowns"
+    environment:
+      # BIND is the interface the server binds to inside the container.
+      # Leave at 0.0.0.0 (default) so the port mapping above works; that
+      # mapping, not this value, is what controls host-network exposure
+      # (use "127.0.0.1:8000:8000" above to restrict to localhost).
+      - "BIND=${BIND:-0.0.0.0}"
     user: "${UID:-1000}:${GID:-1000}"
     init: true
     restart: unless-stopped
